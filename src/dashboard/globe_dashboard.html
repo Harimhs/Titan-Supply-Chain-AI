@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TITAN Supply Chain Intelligence Platform</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0a0a0f;
+            color: #ffffff;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .bg-gradient {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(ellipse at 20% 30%, rgba(0, 255, 242, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 70%, rgba(255, 0, 255, 0.06) 0%, transparent 50%),
+                linear-gradient(135deg, #0a0a0f 0%, #1a0f2e 50%, #0f1419 100%);
+            z-index: -1;
+        }
+
+        #header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 72px;
+            background: rgba(10, 10, 20, 0.85);
+            backdrop-filter: blur(20px) saturate(180%);
+            border-bottom: 1px solid rgba(0, 255, 242, 0.15);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 32px;
+            z-index: 1000;
+            box-shadow: 0 8px 32px rgba(0, 255, 242, 0.1);
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .logo {
+            font-size: 28px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #00fff2 0%, #00c9ff 50%, #ff00ff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.5px;
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px;
+            background: rgba(0, 255, 100, 0.12);
+            border: 1px solid rgba(0, 255, 100, 0.3);
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            color: #00ff88;
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            background: #00ff88;
+            border-radius: 50%;
+            animation: pulse-dot 2s infinite;
+        }
+
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.3); }
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header-stat {
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .header-stat span {
+            color: #00fff2;
+            font-weight: 600;
+        }
+
+        #globe-container {
+            position: absolute;
+            top: 72px;
+            left: 0;
+            right: 420px;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        #sidebar {
+            position: absolute;
+            top: 72px;
+            right: 0;
+            width: 420px;
+            height: 580px;
+            bottom: 0;
+            background: rgba(10, 10, 20, 0.8);
+            backdrop-filter: blur(20px) saturate(180%);
+            border-left: 1px solid rgba(0, 255, 242, 0.15);
+            overflow-y: auto;
+            padding: 24px;
+        }
+
+        #sidebar::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        #sidebar::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        #sidebar::-webkit-scrollbar-thumb {
+            background: rgba(0, 255, 242, 0.3);
+            border-radius: 3px;
+        }
+
+        .section-header {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: rgba(255, 255, 255, 0.5);
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 32px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, rgba(0, 255, 242, 0.05) 0%, rgba(255, 0, 255, 0.03) 100%);
+            border: 1px solid rgba(0, 255, 242, 0.15);
+            border-radius: 12px;
+            padding: 16px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #00fff2, transparent);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(0, 255, 242, 0.4);
+            box-shadow: 0 8px 24px rgba(0, 255, 242, 0.15);
+        }
+
+        .stat-card:hover::before {
+            opacity: 1;
+        }
+
+        .stat-icon {
+            font-size: 24px;
+            margin-bottom: 8px;
+            opacity: 0.8;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.6);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #ffffff 0%, rgba(255, 255, 255, 0.8) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            line-height: 1;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 32px;
+        }
+
+        .filter-btn {
+            position: relative;
+            width: 100%;
+            padding: 14px 20px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            overflow: hidden;
+        }
+
+        .filter-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 3px;
+            height: 100%;
+            background: linear-gradient(180deg, #00fff2, #ff00ff);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .filter-btn:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(0, 255, 242, 0.3);
+            transform: translateX(4px);
+        }
+
+        .filter-btn.active {
+            background: rgba(0, 255, 242, 0.12);
+            border-color: rgba(0, 255, 242, 0.5);
+            color: #00fff2;
+        }
+
+        .filter-btn.active::before {
+            opacity: 1;
+        }
+
+        .filter-icon {
+            font-size: 18px;
+            opacity: 0.8;
+        }
+
+        .disaster-alert {
+            background: linear-gradient(135deg, rgba(255, 50, 80, 0.12) 0%, rgba(255, 0, 100, 0.08) 100%);
+            border: 1px solid rgba(255, 50, 80, 0.3);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            position: relative;
+            overflow: hidden;
+            animation: alert-pulse 3s infinite;
+        }
+
+        @keyframes alert-pulse {
+            0%, 100% { 
+                box-shadow: 0 0 0 0 rgba(255, 50, 80, 0);
+                border-color: rgba(255, 50, 80, 0.3);
+            }
+            50% { 
+                box-shadow: 0 0 20px 0 rgba(255, 50, 80, 0.2);
+                border-color: rgba(255, 50, 80, 0.5);
+            }
+        }
+
+        .disaster-alert::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: linear-gradient(180deg, #ff3250 0%, #ff0064 100%);
+        }
+
+        .disaster-alert h4 {
+            color: #ff5577;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            padding-left: 12px;
+        }
+
+        .disaster-alert p {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 12px;
+            margin: 4px 0;
+            padding-left: 12px;
+        }
+
+        .disaster-alert strong {
+            color: rgba(255, 255, 255, 0.9);
+            font-weight: 600;
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 2000;
+        }
+
+        .loader {
+            width: 60px;
+            height: 60px;
+            border: 3px solid rgba(0, 255, 242, 0.1);
+            border-top-color: #00fff2;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            color: #00fff2;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        @media (max-width: 1200px) {
+            #sidebar {
+                width: 360px;
+                height: 400px;
+            }
+            #globe-container {
+                right: 360px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-gradient"></div>
+
+    <div id="header">
+        <div class="header-left">
+            <div class="logo">⚡ TITAN</div>
+            <div class="status-badge">
+                <div class="status-dot"></div>
+                <span>Live Network</span>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="header-stat">
+                Facilities: <span id="header-facilities">0</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="loading">
+        <div class="loader"></div>
+        <div class="loading-text">Initializing Global Network...</div>
+    </div>
+
+    <div id="globe-container"></div>
+
+    <div id="sidebar">
+        <div class="section-header">Network Statistics</div>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon">🏭</div>
+                <div class="stat-label">Factories</div>
+                <div class="stat-value" id="stat-factories">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">⚓</div>
+                <div class="stat-label">Ports</div>
+                <div class="stat-value" id="stat-ports">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">🏢</div>
+                <div class="stat-label">Warehouses</div>
+                <div class="stat-value" id="stat-warehouses">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">🔥</div>
+                <div class="stat-label">Active Alerts</div>
+                <div class="stat-value" id="stat-disasters">0</div>
+            </div>
+        </div>
+
+        <div class="section-header">Layer Controls</div>
+        <div class="filter-group">
+            <button class="filter-btn active" data-filter="all">
+                <span class="filter-icon">🌍</span>
+                <span>All Facilities</span>
+            </button>
+            <button class="filter-btn" data-filter="factories">
+                <span class="filter-icon">🏭</span>
+                <span>Manufacturing Centers</span>
+            </button>
+            <button class="filter-btn" data-filter="ports">
+                <span class="filter-icon">⚓</span>
+                <span>Global Ports</span>
+            </button>
+            <button class="filter-btn" data-filter="warehouses">
+                <span class="filter-icon">🏢</span>
+                <span>Distribution Hubs</span>
+            </button>
+            <button class="filter-btn" data-filter="disasters">
+                <span class="filter-icon">🔥</span>
+                <span>Risk Zones</span>
+            </button>
+        </div>
+
+        <div class="section-header">Active Threats</div>
+        <div id="disaster-alerts"></div>
+    </div>
+
+    <script src="//unpkg.com/globe.gl"></script>
+    <script>
+        console.log('🚀 TITAN Dashboard initializing...');
+
+        let globe;
+        let facilitiesData = {
+            factories: [],
+            ports: [],
+            warehouses: [],
+            disasters: [],
+            routes: []
+        };
+
+        function initGlobe() {
+            globe = Globe()
+                (document.getElementById('globe-container'))
+                .globeImageUrl('//unpkg.com/three-globe/example/img/earth-blue-marble.jpg')
+                .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png')
+                .backgroundImageUrl('//unpkg.com/three-globe/example/img/night-sky.png')
+                .backgroundColor('rgba(0,0,0,0)')
+                .atmosphereColor('#00fff2')
+                .atmosphereAltitude(0.2)
+                .pointOfView({ altitude: 2.5 });
+
+            globe.controls().autoRotate = true;
+            globe.controls().autoRotateSpeed = 0.5;
+            globe.controls().enableZoom = true;
+
+            console.log('✅ Globe initialized');
+        }
+
+        async function loadData() {
+            try {
+                const response = await fetch('/api/dashboard/data');
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                const data = await response.json();
+                facilitiesData = data;
+                
+                console.log('✅ Data loaded:', {
+                    factories: data.factories.length,
+                    ports: data.ports.length,
+                    warehouses: data.warehouses.length,
+                    disasters: data.disasters.length
+                });
+                
+                renderAll();
+                updateStats();
+                document.getElementById('loading').style.display = 'none';
+                
+            } catch (error) {
+                console.error('❌ Error:', error);
+                document.getElementById('loading').innerHTML = 
+                    `<div style="color:#ff3333">⚠️ Connection Error<br><small>${error.message}</small></div>`;
+            }
+        }
+
+        function renderAll() {
+    const allPoints = [
+        ...facilitiesData.factories,
+        ...facilitiesData.ports,
+        ...facilitiesData.warehouses,
+        ...facilitiesData.disasters
+    ];
+
+    console.log('🎨 Rendering', allPoints.length, 'points');
+
+    globe
+        .pointsData(allPoints)
+        .pointLat('lat')
+        .pointLng('lon')
+        .pointColor('color')
+        .pointAltitude(0.01)
+        .pointRadius('size')
+        .pointLabel('label');
+
+    // Add routes
+    if (facilitiesData.routes && facilitiesData.routes.length > 0) {
+        globe.arcsData(facilitiesData.routes)
+            .arcColor('color')
+            .arcDashLength(0.5)
+            .arcDashGap(0.3)
+            .arcDashAnimateTime(2000)
+            .arcStroke(1.5);
+        console.log('✅ Routes rendered:', facilitiesData.routes.length);
+    }
+}
+
+
+        function updateStats() {
+            document.getElementById('stat-factories').textContent = facilitiesData.factories.length.toLocaleString();
+            document.getElementById('stat-ports').textContent = facilitiesData.ports.length.toLocaleString();
+            document.getElementById('stat-warehouses').textContent = facilitiesData.warehouses.length.toLocaleString();
+            document.getElementById('stat-disasters').textContent = facilitiesData.disasters.length;
+            
+            document.getElementById('header-facilities').textContent = 
+                (facilitiesData.factories.length + facilitiesData.ports.length + facilitiesData.warehouses.length).toLocaleString();
+
+            const container = document.getElementById('disaster-alerts');
+            container.innerHTML = '';
+            
+            if (facilitiesData.disasters.length === 0) {
+                container.innerHTML = '<div style="color:rgba(255,255,255,0.4);font-size:13px;text-align:center;padding:20px;">No active threats</div>';
+            } else {
+                facilitiesData.disasters.forEach(disaster => {
+                    const alert = document.createElement('div');
+                    alert.className = 'disaster-alert';
+                    const parts = disaster.label.split('<br>');
+                    const name = parts[0] ? parts[0].replace('🔥 ', '') : 'Unknown';
+                    const type = parts[1] || 'Unknown';
+                    alert.innerHTML = `
+                        <h4>${name}</h4>
+                        <p><strong>Type:</strong> ${type}</p>
+                        <p><strong>Status:</strong> Active Monitoring</p>
+                    `;
+                    container.appendChild(alert);
+                });
+            }
+        }
+
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                
+                const filter = this.getAttribute('data-filter');
+                console.log('🎯 Filter:', filter);
+                
+                let pointsToShow = [];
+                
+                switch(filter) {
+                    case 'all':
+                        pointsToShow = [
+                            ...facilitiesData.factories,
+                            ...facilitiesData.ports,
+                            ...facilitiesData.warehouses,
+                            ...facilitiesData.disasters
+                        ];
+                        break;
+                    case 'factories':
+                        pointsToShow = facilitiesData.factories;
+                        break;
+                    case 'ports':
+                        pointsToShow = facilitiesData.ports;
+                        break;
+                    case 'warehouses':
+                        pointsToShow = facilitiesData.warehouses;
+                        break;
+                    case 'disasters':
+                        pointsToShow = facilitiesData.disasters;
+                        break;
+                }
+                
+                console.log('📊 Showing', pointsToShow.length, 'points');
+                
+                globe
+                    .pointsData(pointsToShow)
+                    .pointLat('lat')
+                    .pointLng('lon')
+                    .pointColor('color')
+                    .pointAltitude(0.01)
+                    .pointRadius('size')
+                    .pointLabel('label');
+            });
+        });
+
+        initGlobe();
+        loadData();
+    </script>
+</body>
+</html>

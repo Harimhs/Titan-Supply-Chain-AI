@@ -1,0 +1,43 @@
+# Virtual env
+.venv/
+env/
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pytest_cache/
+
+# Node modules
+node_modules/
+
+# Chroma local storage
+chroma_db/
+index/
+db/
+vectorstore/
+
+# Data files
+data/
+datasets/
+*.csv
+*.xlsx
+*.json
+
+# Logs
+logs/
+*.log
+
+# Env files
+.env
+*.env
+
+# Build files
+dist/
+build/
+
+# Editor
+.vscode/
+.idea/
