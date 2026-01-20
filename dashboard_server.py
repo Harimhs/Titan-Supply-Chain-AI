@@ -19,9 +19,13 @@ sys.path.insert(0, str(project_root))
 
 from src.titan_brain import TitanBrain
 
-__import__('pysqlite3')
 import sys
-sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+try:
+    __import__('pysqlite3')
+    sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+    print("✅ SQLite patched for Cloud/ChromaDB")
+except ImportError:
+    print("⚠️ pysqlite3-binary not found. Using default sqlite3.")
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
 CORS(app)
