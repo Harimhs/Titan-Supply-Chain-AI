@@ -19,6 +19,10 @@ sys.path.insert(0, str(project_root))
 
 from src.titan_brain import TitanBrain
 
+__import__('pysqlite3')
+import sys
+sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+
 app = Flask(__name__, template_folder='templates', static_folder='static')
 CORS(app)
 
