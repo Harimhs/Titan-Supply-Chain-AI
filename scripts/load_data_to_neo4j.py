@@ -1,365 +1,495 @@
+#!/usr/bin/env python3
 """
-Load TITAN data into Neo4j - UPDATED FOR NEW SCHEMA
+Load all generated CSV data into Neo4j
+Updated to match new data generation structure
 """
-
-import os
-import json
-import pandas as pd
-import geopandas as gpd
-from neo4j import GraphDatabase
-from dotenv import load_dotenv
+import sys
 from pathlib import Path
+import pandas as pd
+from neo4j import GraphDatabase
+import json
 
-load_dotenv()
+# Add project root to path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 
-# --- CONFIG ---
-NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
-NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
-NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "June#12345")
-BATCH_SIZE = 5000
-DATA_DIR = Path(__file__).parent.parent / "data"
+# Neo4j Configuration
+NEO4J_URI = "bolt://localhost:7687"
+NEO4J_USER = "neo4j"
+NEO4J_PASSWORD = "June#12345"
 
-
-class TitanLoader:
-    def __init__(self):
-        self.driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
-        self.verify_connection()
-
-    def verify_connection(self):
-        try:
-            self.driver.verify_connectivity()
-            print("✅ Connected to Neo4j")
-        except Exception as e:
-            print(f"❌ Connection Failed: {e}")
-            print("\n💡 Make sure Neo4j is running:")
-            print("   docker ps | grep neo4j")
-            raise
-
+class Neo4jLoader:
+    def __init__(self, uri, user, password):
+        """Initialize Neo4j connection"""
+        self.driver = GraphDatabase.driver(uri, auth=(user, password))
+        self.data_dir = project_root / "data" / "processed"
+        
     def close(self):
+        """Close Neo4j connection"""
         self.driver.close()
-
+    
     def clear_database(self):
-        """Delete all existing data"""
+        """Clear all existing data"""
         print("🗑️  Clearing existing data...")
         with self.driver.session() as session:
             session.run("MATCH (n) DETACH DELETE n")
-            print("   ✅ Database cleared")
-
+        print("   ✅ Database cleared\n")
+    
     def create_constraints(self):
+        """Create constraints and indexes"""
         print("🛡️  Creating constraints and indexes...")
-        queries = [
-            # Unique constraints (NEW SCHEMA: using 'id' field)
+        
+        constraints = [
             "CREATE CONSTRAINT factory_id IF NOT EXISTS FOR (f:Factory) REQUIRE f.id IS UNIQUE",
             "CREATE CONSTRAINT port_id IF NOT EXISTS FOR (p:Port) REQUIRE p.id IS UNIQUE",
             "CREATE CONSTRAINT warehouse_id IF NOT EXISTS FOR (w:Warehouse) REQUIRE w.id IS UNIQUE",
-            "CREATE CONSTRAINT product_sku IF NOT EXISTS FOR (p:Product) REQUIRE p.sku IS UNIQUE",
+            "CREATE CONSTRAINT product_id IF NOT EXISTS FOR (p:Product) REQUIRE p.id IS UNIQUE",
             "CREATE CONSTRAINT disaster_id IF NOT EXISTS FOR (d:Disaster) REQUIRE d.id IS UNIQUE",
-            
-            # Spatial indexes for each node type
-            "CREATE INDEX factory_location IF NOT EXISTS FOR (f:Factory) ON (f.lat, f.lon)",
-            "CREATE INDEX port_location IF NOT EXISTS FOR (p:Port) ON (p.lat, p.lon)",
-            "CREATE INDEX warehouse_location IF NOT EXISTS FOR (w:Warehouse) ON (w.lat, w.lon)",
-            "CREATE INDEX disaster_location IF NOT EXISTS FOR (d:Disaster) ON (d.lat, d.lon)",
-            
-            # Additional indexes
-            "CREATE INDEX product_category IF NOT EXISTS FOR (p:Product) ON (p.category)",
-            "CREATE INDEX factory_industry IF NOT EXISTS FOR (f:Factory) ON (f.industry)",
-            "CREATE INDEX warehouse_type IF NOT EXISTS FOR (w:Warehouse) ON (w.type)",
+        ]
+        
+        indexes = [
+            "CREATE INDEX factory_country IF NOT EXISTS FOR (f:Factory) ON (f.country)",
+            "CREATE INDEX factory_product IF NOT EXISTS FOR (f:Factory) ON (f.product_type)",
+            "CREATE INDEX port_country IF NOT EXISTS FOR (p:Port) ON (p.country)",
+            "CREATE INDEX warehouse_country IF NOT EXISTS FOR (w:Warehouse) ON (w.country)",
+            "CREATE INDEX disaster_type IF NOT EXISTS FOR (d:Disaster) ON (d.type)",
         ]
         
         with self.driver.session() as session:
-            for q in queries:
+            for constraint in constraints:
                 try:
-                    session.run(q)
-                    print(f"   ✅ {q.split()[1]}")
+                    session.run(constraint)
+                    print("   ✅ CONSTRAINT")
                 except Exception as e:
-                    print(f"   ⚠️  {e}")
-
-    def load_nodes_from_geojson(self, file_path, label):
-        """Load nodes from GeoJSON (NEW: uses 'id' field)"""
-        print(f"📦 Loading {label} nodes from {file_path.name}...")
+                    print(f"   ⚠️  Constraint exists or error: {str(e)[:50]}")
+            
+            for index in indexes:
+                try:
+                    session.run(index)
+                    print("   ✅ INDEX")
+                except Exception as e:
+                    print(f"   ⚠️  Index exists or error: {str(e)[:50]}")
         
-        if not file_path.exists():
-            print(f"   ⚠️  File not found: {file_path}")
-            return
+        print()
+    
+    def load_factories(self):
+        """Load Factory nodes from factories.csv"""
+        print("🏭 Loading Factories...")
+        csv_file = self.data_dir / "factories.csv"
         
-        gdf = gpd.read_file(file_path)
+        if not csv_file.exists():
+            print(f"   ⚠️  File not found: {csv_file}")
+            return 0
         
-        # Convert to list of dicts
-        records = []
-        for _, row in gdf.iterrows():
-            props = row.drop('geometry').to_dict()
-            props = {k: (v if pd.notna(v) else None) for k, v in props.items()}
-            props['lat'] = row.geometry.y
-            props['lon'] = row.geometry.x
-            records.append(props)
+        df = pd.read_csv(csv_file)
         
-        # Use 'id' field (NEW SCHEMA)
-        query = f"""
-        UNWIND $batch AS row
-        MERGE (n:{label} {{id: row.id}})
-        SET n += row,
-            n.location = point({{latitude: row.lat, longitude: row.lon}})
-        """
+        with self.driver.session() as session:
+            count = 0
+            for _, row in df.iterrows():
+                session.run("""
+                    CREATE (f:Factory {
+                        id: $id,
+                        name: $name,
+                        city: $city,
+                        country: $country,
+                        lat: $lat,
+                        lon: $lon,
+                        capacity: $capacity,
+                        product_type: $product_type,
+                        operational_status: $operational_status
+                    })
+                """, 
+                    id=row['id'],
+                    name=row['name'],
+                    city=row['city'],
+                    country=row['country'],
+                    lat=float(row['lat']),
+                    lon=float(row['lon']),
+                    capacity=int(row['capacity']),
+                    product_type=row['product_type'],
+                    operational_status=row['operational_status']
+                )
+                count += 1
+            
+        print(f"   ✅ Loaded {count} factories\n")
+        return count
+    
+    def load_ports(self):
+        """Load Port nodes from ports.csv"""
+        print("⚓ Loading Ports...")
+        csv_file = self.data_dir / "ports.csv"
         
-        self._execute_batch(query, records)
-
+        if not csv_file.exists():
+            print(f"   ⚠️  File not found: {csv_file}")
+            return 0
+        
+        df = pd.read_csv(csv_file)
+        
+        with self.driver.session() as session:
+            count = 0
+            for _, row in df.iterrows():
+                session.run("""
+                    CREATE (p:Port {
+                        id: $id,
+                        name: $name,
+                        city: $city,
+                        country: $country,
+                        lat: $lat,
+                        lon: $lon,
+                        capacity: $capacity,
+                        port_type: $port_type
+                    })
+                """,
+                    id=row['id'],
+                    name=row['name'],
+                    city=row['city'],
+                    country=row['country'],
+                    lat=float(row['lat']),
+                    lon=float(row['lon']),
+                    capacity=int(row['capacity']),
+                    port_type=row['port_type']
+                )
+                count += 1
+        
+        print(f"   ✅ Loaded {count} ports\n")
+        return count
+    
+    def load_warehouses(self):
+        """Load Warehouse nodes from warehouses.csv"""
+        print("🏢 Loading Warehouses...")
+        csv_file = self.data_dir / "warehouses.csv"
+        
+        if not csv_file.exists():
+            print(f"   ⚠️  File not found: {csv_file}")
+            return 0
+        
+        df = pd.read_csv(csv_file)
+        
+        with self.driver.session() as session:
+            count = 0
+            for _, row in df.iterrows():
+                session.run("""
+                    CREATE (w:Warehouse {
+                        id: $id,
+                        name: $name,
+                        city: $city,
+                        country: $country,
+                        lat: $lat,
+                        lon: $lon,
+                        capacity: $capacity,
+                        warehouse_type: $warehouse_type
+                    })
+                """,
+                    id=row['id'],
+                    name=row['name'],
+                    city=row['city'],
+                    country=row['country'],
+                    lat=float(row['lat']),
+                    lon=float(row['lon']),
+                    capacity=int(row['capacity']),
+                    warehouse_type=row['warehouse_type']
+                )
+                count += 1
+        
+        print(f"   ✅ Loaded {count} warehouses\n")
+        return count
+    
     def load_products(self):
-        """Load products (NEW SCHEMA: no subcategory, hs_code, etc.)"""
-        path = DATA_DIR / "raw" / "products.csv"
-        print(f"📦 Loading Products from {path.name}...")
+        """Load Product nodes from products.csv"""
+        print("📦 Loading Products...")
+        csv_file = self.data_dir / "products.csv"
         
-        if not path.exists():
-            print(f"   ⚠️  File not found: {path}")
-            return
+        if not csv_file.exists():
+            print(f"   ⚠️  File not found: {csv_file}")
+            return 0
         
-        df = pd.read_csv(path)
-        records = df.to_dict('records')
+        df = pd.read_csv(csv_file)
         
-        query = """
-        UNWIND $batch AS row
-        MERGE (p:Product {sku: row.sku})
-        SET p.name = row.name,
-            p.category = row.category,
-            p.weight_kg = row.weight_kg,
-            p.price_usd = row.price_usd,
-            p.manufacturer = row.manufacturer,
-            p.lead_time_days = row.lead_time_days
-        """
+        with self.driver.session() as session:
+            count = 0
+            for _, row in df.iterrows():
+                session.run("""
+                    CREATE (p:Product {
+                        id: $id,
+                        name: $name,
+                        description: $description,
+                        category: $category,
+                        avg_price: $avg_price,
+                        weight_kg: $weight_kg
+                    })
+                """,
+                    id=row['id'],
+                    name=row['name'],
+                    description=row['description'],
+                    category=row['category'],
+                    avg_price=float(row['avg_price']),
+                    weight_kg=float(row['weight_kg'])
+                )
+                count += 1
         
-        self._execute_batch(query, records)
-
-    def load_routes(self):
-        """Load routes from Parquet (NEW: source_id/target_id, not from_id/to_id)"""
-        path = DATA_DIR / "processed" / "routes.parquet"
-        print(f"🛣️  Loading Routes from {path.name}...")
-        
-        if not path.exists():
-            print(f"   ⚠️  File not found: {path}")
-            return
-        
-        df = pd.read_parquet(path)
-        records = df.to_dict('records')
-        
-        # Factory → Port
-        print("   → Creating Factory → Port routes...")
-        factory_port = [r for r in records if r['source_type'] == 'factory' and r['target_type'] == 'port']
-        if factory_port:
-            query = """
-            UNWIND $batch AS row
-            MATCH (source:Factory {id: row.source_id})
-            MATCH (target:Port {id: row.target_id})
-            MERGE (source)-[r:SUPPLIES_TO]->(target)
-            SET r.distance_km = row.distance_km,
-                r.mode = row.transport_mode,
-                r.time_days = row.avg_time_days,
-                r.cost_per_ton_usd = row.cost_per_ton_usd,
-                r.reliability = row.reliability
-            """
-            self._execute_batch(query, factory_port)
-        
-        # Port → Port
-        print("   → Creating Port → Port routes...")
-        port_port = [r for r in records if r['source_type'] == 'port' and r['target_type'] == 'port']
-        if port_port:
-            query = """
-            UNWIND $batch AS row
-            MATCH (source:Port {id: row.source_id})
-            MATCH (target:Port {id: row.target_id})
-            MERGE (source)-[r:SUPPLIES_TO]->(target)
-            SET r.distance_km = row.distance_km,
-                r.mode = row.transport_mode,
-                r.time_days = row.avg_time_days,
-                r.cost_per_ton_usd = row.cost_per_ton_usd,
-                r.reliability = row.reliability
-            """
-            self._execute_batch(query, port_port)
-        
-        # Port → Warehouse
-        print("   → Creating Port → Warehouse routes...")
-        port_warehouse = [r for r in records if r['source_type'] == 'port' and r['target_type'] == 'warehouse']
-        if port_warehouse:
-            query = """
-            UNWIND $batch AS row
-            MATCH (source:Port {id: row.source_id})
-            MATCH (target:Warehouse {id: row.target_id})
-            MERGE (source)-[r:SUPPLIES_TO]->(target)
-            SET r.distance_km = row.distance_km,
-                r.mode = row.transport_mode,
-                r.time_days = row.avg_time_days,
-                r.cost_per_ton_usd = row.cost_per_ton_usd,
-                r.reliability = row.reliability
-            """
-            self._execute_batch(query, port_warehouse)
-        
-        # Warehouse → Warehouse
-        print("   → Creating Warehouse → Warehouse routes...")
-        wh_wh = [r for r in records if r['source_type'] == 'warehouse' and r['target_type'] == 'warehouse']
-        if wh_wh:
-            query = """
-            UNWIND $batch AS row
-            MATCH (source:Warehouse {id: row.source_id})
-            MATCH (target:Warehouse {id: row.target_id})
-            MERGE (source)-[r:SUPPLIES_TO]->(target)
-            SET r.distance_km = row.distance_km,
-                r.mode = row.transport_mode,
-                r.time_days = row.avg_time_days,
-                r.cost_per_ton_usd = row.cost_per_ton_usd,
-                r.reliability = row.reliability
-            """
-            self._execute_batch(query, wh_wh)
-
-    def load_inventory(self):
-        """Load inventory (NEW: product_sku, current_stock, not sku/quantity)"""
-        path = DATA_DIR / "processed" / "inventory_snapshot.parquet"
-        print(f"📊 Loading Inventory from {path.name}...")
-        
-        if not path.exists():
-            print(f"   ⚠️  File not found: {path}")
-            return
-        
-        df = pd.read_parquet(path)
-        records = df.to_dict('records')
-        
-        query = """
-        UNWIND $batch AS row
-        MATCH (p:Product {sku: row.product_sku})
-        MATCH (w:Warehouse {id: row.warehouse_id})
-        MERGE (w)-[r:STOCKS]->(p)
-        SET r.current_stock = row.current_stock,
-            r.daily_demand = row.daily_demand,
-            r.safety_stock = row.safety_stock,
-            r.reorder_point = row.reorder_point,
-            r.stockout_risk = row.stockout_risk,
-            r.days_remaining = row.days_remaining,
-            r.last_replenishment = row.last_replenishment
-        """
-        
-        self._execute_batch(query, records)
-
+        print(f"   ✅ Loaded {count} products\n")
+        return count
+    
     def load_disasters(self):
-        """Load disasters (NEW: id, start_date, duration_days)"""
-        path = DATA_DIR / "raw" / "disasters.json"
-        print(f"🔥 Loading Disasters from {path.name}...")
+        """Load Disaster nodes from disasters.csv"""
+        print("🌪️  Loading Disasters...")
+        csv_file = self.data_dir / "disasters.csv"
         
-        if not path.exists():
-            print(f"   ⚠️  File not found: {path}")
-            return
+        if not csv_file.exists():
+            print(f"   ⚠️  File not found: {csv_file}")
+            return 0
         
-        with open(path) as f:
-            data = json.load(f)
-        
-        query = """
-        UNWIND $batch AS row
-        MERGE (d:Disaster {id: row.id})
-        SET d.name = row.name,
-            d.type = row.type,
-            d.severity = row.severity,
-            d.location_name = row.location,
-            d.lat = row.lat,
-            d.lon = row.lon,
-            d.location = point({latitude: row.lat, longitude: row.lon}),
-            d.start_date = row.start_date,
-            d.duration_days = row.duration_days,
-            d.affected_radius_km = row.affected_radius_km,
-            d.estimated_loss_inr_cr = row.estimated_loss_inr_cr
-        """
-        
-        self._execute_batch(query, data)
-        
-        # Link disasters to nearby facilities
-        print("   → Linking Disasters to nearby facilities...")
-        link_query = """
-        MATCH (d:Disaster)
-        MATCH (n) WHERE (n:Factory OR n:Port OR n:Warehouse)
-            AND n.location IS NOT NULL
-            AND point.distance(d.location, n.location) < (d.affected_radius_km * 1000)
-        MERGE (d)-[:AFFECTS]->(n)
-        """
+        df = pd.read_csv(csv_file)
         
         with self.driver.session() as session:
-            session.run(link_query)
-            print("   ✅ Created disaster-facility relationships")
-
-    def _execute_batch(self, query, data):
-        """Execute query in batches"""
-        total = len(data)
-        if total == 0:
-            print("   ⚠️  No data to load")
-            return
+            count = 0
+            for _, row in df.iterrows():
+                session.run("""
+                    CREATE (d:Disaster {
+                        id: $id,
+                        type: $type,
+                        severity: $severity,
+                        lat: $lat,
+                        lon: $lon,
+                        city: $city,
+                        country: $country,
+                        impact_radius_km: $impact_radius_km,
+                        affected_entities: $affected_entities,
+                        affected_count: $affected_count,
+                        start_date: $start_date,
+                        status: $status,
+                        description: $description
+                    })
+                """,
+                    id=row['id'],
+                    type=row['type'],
+                    severity=row['severity'],
+                    lat=float(row['lat']),
+                    lon=float(row['lon']),
+                    city=row['city'],
+                    country=row['country'],
+                    impact_radius_km=float(row['impact_radius_km']),
+                    affected_entities=row['affected_entities'],
+                    affected_count=int(row['affected_count']),
+                    start_date=row['start_date'],
+                    status=row['status'],
+                    description=row['description']
+                )
+                count += 1
+        
+        print(f"   ✅ Loaded {count} disasters\n")
+        return count
+    
+    def load_supply_relationships(self):
+        """Load SUPPLIES_TO relationships from supply_relationships.csv"""
+        print("🔗 Loading SUPPLIES_TO relationships...")
+        csv_file = self.data_dir / "supply_relationships.csv"
+        
+        if not csv_file.exists():
+            print(f"   ⚠️  File not found: {csv_file}")
+            return 0
+        
+        df = pd.read_csv(csv_file)
         
         with self.driver.session() as session:
-            for i in range(0, total, BATCH_SIZE):
-                batch = data[i:i+BATCH_SIZE]
-                try:
-                    session.run(query, batch=batch)
-                    print(f"   Processed {min(i+BATCH_SIZE, total):,}/{total:,}", end='\r')
-                except Exception as e:
-                    print(f"\n   ❌ Error in batch {i}: {e}")
-                    if i == 0 and batch:
-                        print(f"   Sample record: {batch[0]}")
-                    raise
-        print("")  # New line after progress
+            count = 0
+            for _, row in df.iterrows():
+                # Match source and target by type
+                query = f"""
+                    MATCH (source:{row['source_type']} {{id: $source_id}})
+                    MATCH (target:{row['target_type']} {{id: $target_id}})
+                    CREATE (source)-[r:SUPPLIES_TO {{
+                        id: $rel_id,
+                        product_id: $product_id,
+                        quantity: $quantity,
+                        frequency: $frequency,
+                        distance_km: $distance_km
+                    }}]->(target)
+                """
+                
+                session.run(query,
+                    source_id=row['source_id'],
+                    target_id=row['target_id'],
+                    rel_id=row['id'],
+                    product_id=row['product_id'],
+                    quantity=int(row['quantity']),
+                    frequency=row['frequency'],
+                    distance_km=float(row['distance_km'])
+                )
+                count += 1
+        
+        print(f"   ✅ Loaded {count} SUPPLIES_TO relationships\n")
+        return count
+    
+    def load_stock_relationships(self):
+        """Load STOCKS relationships from stock_relationships.csv"""
+        print("📊 Loading STOCKS relationships...")
+        csv_file = self.data_dir / "stock_relationships.csv"
+        
+        if not csv_file.exists():
+            print(f"   ⚠️  File not found: {csv_file}")
+            return 0
+        
+        df = pd.read_csv(csv_file)
+        
+        with self.driver.session() as session:
+            count = 0
+            for _, row in df.iterrows():
+                session.run("""
+                    MATCH (w:Warehouse {id: $warehouse_id})
+                    MATCH (p:Product {id: $product_id})
+                    CREATE (w)-[r:STOCKS {
+                        id: $stock_id,
+                        quantity: $quantity,
+                        last_updated: $last_updated
+                    }]->(p)
+                """,
+                    warehouse_id=row['warehouse_id'],
+                    product_id=row['product_id'],
+                    stock_id=row['id'],
+                    quantity=int(row['quantity']),
+                    last_updated=row['last_updated']
+                )
+                count += 1
+        
+        print(f"   ✅ Loaded {count} STOCKS relationships\n")
+        return count
+    
+    def load_disaster_impacts(self):
+        """Load AFFECTS relationships from disasters to entities"""
+        print("💥 Loading disaster AFFECTS relationships...")
+        csv_file = self.data_dir / "disasters.csv"
+        
+        if not csv_file.exists():
+            print(f"   ⚠️  File not found: {csv_file}")
+            return 0
+        
+        df = pd.read_csv(csv_file)
+        
+        with self.driver.session() as session:
+            count = 0
+            for _, row in df.iterrows():
+                # Check if affected_entities exists and is not NaN
+                if pd.isna(row['affected_entities']) or not row['affected_entities']:
+                    print(f"   ⚠️  No affected entities for disaster {row['id']}")
+                    continue
+                
+                # Convert to string and parse affected entities
+                affected = str(row['affected_entities']).split(',')
+                
+                for entity_id in affected:
+                    entity_id = entity_id.strip()
+                    if not entity_id:
+                        continue
+                    
+                    # Determine entity type from ID prefix
+                    if entity_id.startswith('FACTORY'):
+                        label = 'Factory'
+                    elif entity_id.startswith('PORT'):
+                        label = 'Port'
+                    elif entity_id.startswith('WAREHOUSE'):
+                        label = 'Warehouse'
+                    else:
+                        continue
+                    
+                    query = f"""
+                        MATCH (d:Disaster {{id: $disaster_id}})
+                        MATCH (e:{label} {{id: $entity_id}})
+                        CREATE (d)-[r:AFFECTS {{
+                            severity: $severity,
+                            impact_date: $start_date
+                        }}]->(e)
+                    """
+                    
+                    try:
+                        session.run(query,
+                            disaster_id=row['id'],
+                            entity_id=entity_id,
+                            severity=row['severity'],
+                            start_date=row['start_date']
+                        )
+                        count += 1
+                    except Exception as e:
+                        # Entity might not exist, skip silently
+                        pass
+        
+        print(f"   ✅ Loaded {count} AFFECTS relationships\n")
+        return count
 
-    def show_stats(self):
-        """Show database statistics"""
-        print("\n📊 Database Statistics:")
+    
+    def get_statistics(self):
+        """Get database statistics"""
         with self.driver.session() as session:
             # Node counts
-            result = session.run("MATCH (n) RETURN labels(n)[0] as Type, count(n) as Count ORDER BY Count DESC")
-            print("\n   Node Counts:")
-            for record in result:
-                print(f"   {record['Type']:<15} : {record['Count']:>10,}")
+            node_counts = {}
+            for label in ['Factory', 'Port', 'Warehouse', 'Product', 'Disaster']:
+                result = session.run(f"MATCH (n:{label}) RETURN count(n) as count")
+                node_counts[label] = result.single()['count']
             
             # Relationship counts
-            result = session.run("MATCH ()-[r]->() RETURN type(r) as Type, count(r) as Count ORDER BY Count DESC")
-            print("\n   Relationship Counts:")
-            for record in result:
-                print(f"   {record['Type']:<15} : {record['Count']:>10,}")
-
+            rel_counts = {}
+            for rel_type in ['SUPPLIES_TO', 'STOCKS', 'AFFECTS']:
+                result = session.run(f"MATCH ()-[r:{rel_type}]->() RETURN count(r) as count")
+                rel_counts[rel_type] = result.single()['count']
+            
+            return node_counts, rel_counts
 
 def main():
-    loader = TitanLoader()
+    """Main execution"""
+    print("\n" + "="*70)
+    print("🚀 LOADING DATA TO NEO4J")
+    print("="*70 + "\n")
+    
+    loader = Neo4jLoader(NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD)
     
     try:
-        # Clear old data
-        loader.clear_database()
+        # Connect
+        print("✅ Connected to Neo4j\n")
         
-        # Create schema
+        # Clear and setup
+        loader.clear_database()
         loader.create_constraints()
         
         # Load nodes
-        print("\n" + "="*70)
-        print("STEP 1: LOADING NODES")
         print("="*70)
-        loader.load_nodes_from_geojson(DATA_DIR / "raw" / "factories.geojson", "Factory")
-        loader.load_nodes_from_geojson(DATA_DIR / "raw" / "ports.geojson", "Port")
-        loader.load_nodes_from_geojson(DATA_DIR / "raw" / "warehouses.geojson", "Warehouse")
-        loader.load_products()
+        print("STEP 1: LOADING NODES")
+        print("="*70 + "\n")
+        
+        factories = loader.load_factories()
+        ports = loader.load_ports()
+        warehouses = loader.load_warehouses()
+        products = loader.load_products()
+        disasters = loader.load_disasters()
         
         # Load relationships
-        print("\n" + "="*70)
+        print("="*70)
         print("STEP 2: LOADING RELATIONSHIPS")
-        print("="*70)
-        loader.load_routes()
-        loader.load_inventory()
+        print("="*70 + "\n")
         
-        # Load events
-        print("\n" + "="*70)
-        print("STEP 3: LOADING EVENTS")
-        print("="*70)
-        loader.load_disasters()
+        supplies = loader.load_supply_relationships()
+        stocks = loader.load_stock_relationships()
+        affects = loader.load_disaster_impacts()
         
-        # Show results
-        print("\n" + "="*70)
+        # Statistics
+        print("="*70)
         print("✅ DATA LOADING COMPLETE!")
-        print("="*70)
-        loader.show_stats()
+        print("="*70 + "\n")
+        
+        node_counts, rel_counts = loader.get_statistics()
+        
+        print("📊 Database Statistics:\n")
+        print("   Node Counts:")
+        for label, count in node_counts.items():
+            print(f"      {label}: {count:,}")
+        
+        print("\n   Relationship Counts:")
+        for rel_type, count in rel_counts.items():
+            print(f"      {rel_type}: {count:,}")
         
         print("\n🌐 Access Neo4j Browser:")
-        print("   URL: http://localhost:7474")
-        print("   Username: neo4j")
-        print("   Password: June#12345")
+        print(f"   URL: http://localhost:7474")
+        print(f"   Username: {NEO4J_USER}")
+        print(f"   Password: {NEO4J_PASSWORD}")
         
         print("\n🔍 Try these queries:")
         print("   1. View sample factories:")
@@ -369,11 +499,16 @@ def main():
         print("      RETURN path LIMIT 5")
         print("\n   3. View disaster impacts:")
         print("      MATCH (d:Disaster)-[:AFFECTS]->(n)")
-        print("      RETURN d.name, d.type, count(n) as affected_facilities")
+        print("      RETURN d.type, d.severity, count(n) as affected_facilities")
+        print()
         
+    except Exception as e:
+        print(f"\n❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
+    
     finally:
         loader.close()
-
 
 if __name__ == "__main__":
     main()

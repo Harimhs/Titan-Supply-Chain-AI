@@ -1,186 +1,157 @@
 #!/usr/bin/env python3
 """
-TITAN Supply Chain Dashboard
-3D Interactive Global Supply Chain Visualization
+TITAN Supply Chain Dashboard - Simplified Working Version
 """
 
 import dash
-from dash import dcc, html, Input, Output, State, callback_context
+from dash import dcc, html, Input, Output, State
 import dash_bootstrap_components as dbc
-import plotly.graph_objects as go
-import pandas as pd
-import numpy as np
-from datetime import datetime
-import asyncio
+import sys
+from pathlib import Path
 
-from src.dashboard.components.globe_map import create_globe_figure
-from src.dashboard.components.chat_panel import create_chat_panel
-from src.dashboard.utils.data_loader import DashboardDataLoader
+# Add to path
+sys.path.append(str(Path(__file__).parent))
+
 from src.orchestrator.state_graph import StateGraphOrchestrator
+from src.simulation.god_mode import GodMode
 
-
-# ============================================================================
-# INITIALIZATION
-# ============================================================================
-
-# Initialize Dash app
+# Initialize
 app = dash.Dash(
     __name__,
-    external_stylesheets=[dbc.themes.CYBORG],  # Dark theme
+    external_stylesheets=[dbc.themes.CYBORG],
     suppress_callback_exceptions=True,
     title="TITAN Supply Chain AI"
 )
 
-# Load data
-data_loader = DashboardDataLoader()
 orchestrator = StateGraphOrchestrator()
+god_mode = GodMode()
 
-# Global state
-app_state = {
-    'selected_disaster': None,
-    'zoom_level': 1.0,
-    'chat_history': []
-}
-
-
-# ============================================================================
-# LAYOUT
-# ============================================================================
-
+# Layout
 app.layout = dbc.Container([
     # Header
     dbc.Row([
         dbc.Col([
-            html.H1("🌍 TITAN Supply Chain AI", 
-                   className="text-center text-primary mb-0"),
-            html.P("Real-time Global Supply Chain Intelligence",
+            html.H1("🌍 TITAN Supply Chain AI", className="text-center mb-0", 
+                   style={'color': '#00d9ff'}),
+            html.P("Real-time Global Supply Chain Intelligence with DCBA", 
                   className="text-center text-muted mb-3")
         ])
-    ]),
+    ], className="mt-4"),
+    
+    html.Hr(),
     
     # Main Content
     dbc.Row([
-        # Left Panel: 3D Globe
+        # Left Panel: Chat Interface
         dbc.Col([
             dbc.Card([
                 dbc.CardHeader([
-                    html.H5("🗺️ Global Supply Chain Network", className="mb-0"),
-                    html.Small("Interactive 3D Visualization", className="text-muted")
-                ]),
-                dbc.CardBody([
-                    dcc.Graph(
-                        id='globe-map',
-                        figure=create_globe_figure(data_loader),
-                        style={'height': '70vh'},
-                        config={'displayModeBar': True, 'scrollZoom': True}
-                    ),
-                    
-                    # Controls
-                    dbc.Row([
-                        dbc.Col([
-                            dbc.ButtonGroup([
-                                dbc.Button("🏭 Factories", id="btn-factories", 
-                                          color="success", outline=True, size="sm"),
-                                dbc.Button("⚓ Ports", id="btn-ports", 
-                                          color="info", outline=True, size="sm"),
-                                dbc.Button("🏢 Warehouses", id="btn-warehouses", 
-                                          color="warning", outline=True, size="sm"),
-                                dbc.Button("🔥 Disasters", id="btn-disasters", 
-                                          color="danger", outline=True, size="sm"),
-                            ], className="w-100")
-                        ], width=12)
-                    ], className="mt-3")
-                ])
-            ], className="h-100")
-        ], width=8),
-        
-        # Right Panel: Chat & Stats
-        dbc.Col([
-            # Chat Panel
-            dbc.Card([
-                dbc.CardHeader([
-                    html.H5("💬 AI Assistant", className="mb-0"),
-                    html.Small("Ask about supply chain", className="text-muted")
+                    html.H4("💬 AI Assistant", className="mb-0"),
+                    html.Small("Ask about supply chains, cascades, or disasters", 
+                             className="text-muted")
                 ]),
                 dbc.CardBody([
                     # Chat messages
-                    html.Div(id='chat-messages', 
-                            style={
-                                'height': '40vh',
-                                'overflowY': 'scroll',
-                                'padding': '10px',
-                                'backgroundColor': '#1a1a1a',
-                                'borderRadius': '5px',
-                                'marginBottom': '10px'
-                            },
-                            children=[
-                                html.P("👋 Hello! Ask me about supply chains, disasters, or routes.",
-                                      className="text-muted")
-                            ]),
+                    html.Div(
+                        id='chat-messages',
+                        style={
+                            'height': '50vh',
+                            'overflowY': 'scroll',
+                            'padding': '15px',
+                            'backgroundColor': '#1a1a1a',
+                            'borderRadius': '8px',
+                            'marginBottom': '15px',
+                            'border': '1px solid #333'
+                        },
+                        children=[
+                            html.Div([
+                                html.Strong("🤖 TITAN: ", style={'color': '#00d9ff'}),
+                                html.Span("Hello! Ask me about supply chain disruptions, "
+                                        "cascade impacts, or try God Mode below!",
+                                        style={'color': '#bbb'})
+                            ])
+                        ]
+                    ),
                     
                     # Input
                     dbc.InputGroup([
                         dbc.Input(
                             id='chat-input',
-                            placeholder="e.g., Impact of Taiwan earthquake?",
-                            type="text"
+                            placeholder="e.g., What happens if FAC-00042 fails?",
+                            type="text",
+                            style={'backgroundColor': '#2a2a2a', 'color': '#fff', 'border': '1px solid #444'}
                         ),
-                        dbc.Button("Send", id='chat-send', color="primary")
-                    ])
+                        dbc.Button("Send", id='chat-send', color="primary", n_clicks=0)
+                    ]),
+                    
+                    # Loading indicator
+                    dbc.Spinner(html.Div(id='loading-output'), color="primary", size="sm")
+                ])
+            ])
+        ], width=7),
+        
+        # Right Panel: God Mode + Stats
+        dbc.Col([
+            # God Mode Panel
+            dbc.Card([
+                dbc.CardHeader([
+                    html.H4("🎮 God Mode", className="mb-0"),
+                    html.Small("Disable nodes & simulate disasters", className="text-muted")
+                ]),
+                dbc.CardBody([
+                    html.Label("Node ID to Disable:", className="mb-2"),
+                    dbc.InputGroup([
+                        dbc.Input(
+                            id='disable-input',
+                            placeholder="e.g., FAC-00042",
+                            type="text",
+                            style={'backgroundColor': '#2a2a2a', 'color': '#fff'}
+                        ),
+                        dbc.Button("Disable", id='disable-button', 
+                                 color="danger", outline=True, n_clicks=0)
+                    ], className="mb-3"),
+                    
+                    dbc.Button("🔄 Reset All Nodes", id='reset-button', 
+                             color="warning", outline=True, className="w-100 mb-3", n_clicks=0),
+                    
+                    html.Hr(),
+                    
+                    html.Div(id='god-output', style={
+                        'padding': '10px',
+                        'backgroundColor': '#2a2a2a',
+                        'borderRadius': '5px',
+                        'minHeight': '100px',
+                        'color': '#bbb'
+                    }, children="Ready for action...")
                 ])
             ], className="mb-3"),
             
             # Stats Panel
             dbc.Card([
-                dbc.CardHeader(html.H5("📊 Network Statistics", className="mb-0")),
+                dbc.CardHeader(html.H5("📊 System Stats", className="mb-0")),
                 dbc.CardBody([
                     html.Div(id='stats-panel', children=[
-                        dbc.Row([
-                            dbc.Col([
-                                html.H4(f"{data_loader.stats['factories']:,}", 
-                                       className="text-success mb-0"),
-                                html.Small("Factories", className="text-muted")
-                            ], width=6),
-                            dbc.Col([
-                                html.H4(f"{data_loader.stats['ports']:,}", 
-                                       className="text-info mb-0"),
-                                html.Small("Ports", className="text-muted")
-                            ], width=6)
-                        ], className="mb-3"),
-                        dbc.Row([
-                            dbc.Col([
-                                html.H4(f"{data_loader.stats['warehouses']:,}", 
-                                       className="text-warning mb-0"),
-                                html.Small("Warehouses", className="text-muted")
-                            ], width=6),
-                            dbc.Col([
-                                html.H4(f"{data_loader.stats['disasters']}", 
-                                       className="text-danger mb-0"),
-                                html.Small("Disasters", className="text-muted")
-                            ], width=6)
-                        ], className="mb-3"),
+                        html.P("⚡ System: Online", className="mb-2", style={'color': '#0f0'}),
+                        html.P("🔧 DCBA Engine: Active", className="mb-2"),
+                        html.P("🗄️ Neo4j: Connected", className="mb-2"),
+                        html.P("💾 ChromaDB: Ready", className="mb-2"),
                         html.Hr(),
-                        html.P(f"Last updated: {datetime.now().strftime('%H:%M:%S')}", 
-                              className="text-muted small mb-0")
+                        html.Small("TITAN v1.0 - Dynamic Context Budget Allocator", 
+                                 className="text-muted")
                     ])
                 ])
             ])
-        ], width=4)
-    ], className="g-3"),
+        ], width=5)
+    ], className="g-3")
     
-    # Hidden stores for state
-    dcc.Store(id='map-state', data={'view': 'all'}),
-    dcc.Interval(id='update-interval', interval=5000, n_intervals=0)  # 5s refresh
-    
-], fluid=True, className="p-4")
+], fluid=True, className="p-4", style={'backgroundColor': '#0a0a0a', 'minHeight': '100vh'})
 
 
-# ============================================================================
-# CALLBACKS
-# ============================================================================
-
+# Callbacks
 @app.callback(
-    Output('chat-messages', 'children'),
+    [Output('chat-messages', 'children'),
+     Output('chat-input', 'value'),
+     Output('loading-output', 'children')],
     Input('chat-send', 'n_clicks'),
     State('chat-input', 'value'),
     State('chat-messages', 'children'),
@@ -188,75 +159,121 @@ app.layout = dbc.Container([
 )
 def handle_chat(n_clicks, message, current_messages):
     """Handle chat messages"""
-    if not message:
-        return current_messages
+    if not message or not message.strip():
+        return current_messages, "", ""
     
     # Add user message
     user_msg = html.Div([
-        html.Strong("👤 You: ", className="text-primary"),
-        html.Span(message)
-    ], className="mb-2")
+        html.Strong("👤 You: ", style={'color': '#4CAF50'}),
+        html.Span(message, style={'color': '#ddd'})
+    ], className="mb-3", style={'padding': '8px', 'backgroundColor': '#1a2a1a', 'borderRadius': '5px'})
     current_messages.append(user_msg)
     
-    # Get AI response (sync wrapper for async)
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    result = loop.run_until_complete(orchestrator.run(message))
-    loop.close()
+    try:
+        # Get AI response
+        import asyncio
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        result = loop.run_until_complete(orchestrator.run(message))
+        loop.close()
+        
+        # Format response
+        answer = result['answer'][:800] + "..." if len(result['answer']) > 800 else result['answer']
+        
+        # Add AI response with details
+        ai_msg = html.Div([
+            html.Strong("🤖 TITAN: ", style={'color': '#00d9ff'}),
+            html.Span(answer, style={'color': '#ddd'}),
+            html.Br(),
+            html.Hr(style={'margin': '8px 0', 'opacity': '0.3'}),
+            html.Small([
+                f"⏱️ {result['processing_time']['total']:.2f}s | ",
+                f"📊 Intent: {result['intent']} | ",
+                f"🎯 Confidence: {result['confidence']:.0%}"
+            ], style={'color': '#888'}),
+            html.Br(),
+            html.Small([
+                f"💰 Allocation: GraphRAG={result['allocation'].get('graph_rag', 0)} | ",
+                f"VectorRAG={result['allocation'].get('vector_rag', 0)} tokens"
+            ], style={'color': '#666'})
+        ], className="mb-3", style={
+            'padding': '12px', 
+            'backgroundColor': '#1a1a2a', 
+            'borderRadius': '5px',
+            'borderLeft': '3px solid #00d9ff'
+        })
+        current_messages.append(ai_msg)
+        
+    except Exception as e:
+        # Error message
+        error_msg = html.Div([
+            html.Strong("❌ Error: ", style={'color': '#ff4444'}),
+            html.Span(str(e), style={'color': '#ddd'})
+        ], className="mb-3", style={'padding': '8px', 'backgroundColor': '#2a1a1a', 'borderRadius': '5px'})
+        current_messages.append(error_msg)
     
-    # Add AI response
-    ai_msg = html.Div([
-        html.Strong("🤖 TITAN: ", className="text-success"),
-        html.Span(result['answer'][:500] + "..." if len(result['answer']) > 500 else result['answer']),
-        html.Br(),
-        html.Small(f"⏱️ {result['processing_time']['total']:.1f}s | "
-                  f"📊 {result['intent']}", 
-                  className="text-muted")
-    ], className="mb-3", style={'backgroundColor': '#2a2a2a', 'padding': '10px', 'borderRadius': '5px'})
-    current_messages.append(ai_msg)
-    
-    return current_messages
+    return current_messages, "", ""  # Clear input
 
 
 @app.callback(
-    Output('globe-map', 'figure'),
-    [Input('btn-factories', 'n_clicks'),
-     Input('btn-ports', 'n_clicks'),
-     Input('btn-warehouses', 'n_clicks'),
-     Input('btn-disasters', 'n_clicks')],
+    Output('god-output', 'children'),
+    [Input('disable-button', 'n_clicks'),
+     Input('reset-button', 'n_clicks')],
+    State('disable-input', 'value'),
     prevent_initial_call=True
 )
-def update_map_view(factories_click, ports_click, warehouses_click, disasters_click):
-    """Update map based on button clicks"""
+def handle_god_mode(disable_clicks, reset_clicks, node_id):
+    """Handle God Mode actions"""
+    from dash import callback_context
+    
     ctx = callback_context
     if not ctx.triggered:
-        return create_globe_figure(data_loader)
+        return "Ready for action..."
     
     button_id = ctx.triggered[0]['prop_id'].split('.')[0]
     
-    # Update view based on button
-    view_filter = {
-        'btn-factories': 'factories',
-        'btn-ports': 'ports',
-        'btn-warehouses': 'warehouses',
-        'btn-disasters': 'disasters'
-    }.get(button_id, 'all')
+    if button_id == 'disable-button' and node_id:
+        result = god_mode.disable_node(node_id, reason="Dashboard God Mode")
+        
+        if result['success']:
+            # Find affected warehouses
+            affected = god_mode.get_affected_warehouses_by_disabled_node(node_id)
+            
+            return html.Div([
+                html.H6("✅ Node Disabled", style={'color': '#ff4444'}),
+                html.P(f"Name: {result['name']}", className="mb-1"),
+                html.P(f"Type: {result['type']}", className="mb-1"),
+                html.Hr(),
+                html.P(f"⚠️ {len(affected)} downstream warehouses affected", 
+                      style={'color': '#ffaa00'}),
+                html.Small("Try querying: 'What happens if this node fails?'", 
+                         className="text-muted")
+            ])
+        else:
+            return html.Div([
+                html.H6("❌ Error", style={'color': '#ff4444'}),
+                html.P(result['error'])
+            ])
     
-    return create_globe_figure(data_loader, view=view_filter)
+    elif button_id == 'reset-button':
+        result = god_mode.reset_all()
+        return html.Div([
+            html.H6("♻️ System Reset", style={'color': '#4CAF50'}),
+            html.P(f"Re-enabled {result['re_enabled']} nodes"),
+            html.Small("All nodes are now active", className="text-muted")
+        ])
+    
+    return "Enter node ID and click Disable"
 
-
-# ============================================================================
-# RUN
-# ============================================================================
 
 if __name__ == '__main__':
-    print("🚀 Starting TITAN Dashboard...")
-    print("📡 Loading data from Neo4j...")
-    print(f"✅ Loaded {data_loader.stats['factories']:,} factories")
-    print(f"✅ Loaded {data_loader.stats['ports']:,} ports")
-    print(f"✅ Loaded {data_loader.stats['warehouses']:,} warehouses")
-    print(f"✅ Loaded {data_loader.stats['disasters']} disasters")
-    print("\n🌐 Dashboard running at: http://127.0.0.1:8050")
-    print("Press Ctrl+C to stop\n")
+    print("\n" + "="*70)
+    print("🚀 TITAN Supply Chain AI Dashboard")
+    print("="*70)
+    print("\n✅ Orchestrator initialized")
+    print("✅ DCBA engine ready")
+    print("✅ God Mode enabled")
+    print("\n🌐 Dashboard: http://127.0.0.1:8050")
+    print("⌨️  Press Ctrl+C to stop\n")
     
-    app.run_server(debug=True, host='127.0.0.1', port=8050)
+    app.run(debug=True, host='127.0.0.1', port=8050)

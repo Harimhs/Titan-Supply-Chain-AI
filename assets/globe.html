@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; }
+        #globeViz { width: 100vw; height: 100vh; }
+    </style>
+    <script src="//unpkg.com/globe.gl"></script>
+</head>
+<body>
+    <div id="globeViz"></div>
+    
+    <script>
+        fetch('http://localhost:8000/api/globe-data')
+            .then(res => res.json())
+            .then(data => {
+                console.log('Data loaded:', data);
+                
+                // Create globe
+                const world = Globe()
+                    .globeImageUrl('//unpkg.com/three-globe/example/img/earth-night.jpg')
+                    .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png')
+                    .backgroundImageUrl('//unpkg.com/three-globe/example/img/night-sky.png')
+                    
+                    // Points (factories + ports + warehouses combined)
+                    .pointsData([...data.factories, ...data.ports, ...data.warehouses])
+                    .pointAltitude(0.01)
+                    .pointColor('color')
+                    .pointRadius('size')
+                    .pointLabel('label')
+                    
+                    // Arcs (routes)
+                    .arcsData(data.routes)
+                    .arcColor('color')
+                    .arcDashLength(0.4)
+                    .arcDashGap(0.2)
+                    .arcDashAnimateTime(2000)
+                    .arcStroke(0.5)
+                    
+                    (document.getElementById('globeViz'));
+                
+                // Auto-rotate
+                world.controls().autoRotate = true;
+                world.controls().autoRotateSpeed = 0.5;
+                
+                // Start at Asia
+                world.pointOfView({ lat: 20, lng: 80, altitude: 2.5 }, 1000);
+            })
+            .catch(err => {
+                console.error('Error loading globe:', err);
+                document.body.innerHTML = '<h1 style="color:red">Error loading globe. Check console.</h1>';
+            });
+    </script>
+</body>
+</html>

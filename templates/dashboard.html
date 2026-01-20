@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TITAN Supply Chain Intelligence</title>
+    
+    <link rel="stylesheet" href="/static/dashboard.css">
+    
+    <script src="//unpkg.com/globe.gl"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+    <div class="dashboard-container">
+        
+        <header class="header">
+            <div class="header-left">
+                <button id="sidebarToggle" class="icon-btn">☰</button>
+                <div class="brand">
+                    <h1>TITAN</h1>
+                </div>
+            </div>
+            <div class="header-right">
+                <button id="downloadReportBtn" class="download-btn">
+                    📄 Download Report
+                </button>
+                <div class="status-badge online">
+                    <span class="dot"></span> System Online
+                </div>
+            </div>
+        </header>
+
+        <div class="main-content">
+            
+            <aside id="sidebar" class="sidebar">
+                
+                <div class="panel">
+                    <h3>📊 Live Metrics</h3>
+                    <div class="metrics-grid">
+                        <div class="metric-box">
+                            <span class="label">Facilities</span>
+                            <span id="totalFacilities" class="value">-</span>
+                        </div>
+                        <div class="metric-box">
+                            <span class="label">Routes</span>
+                            <span id="totalRoutes" class="value">-</span>
+                        </div>
+                        <div class="metric-box">
+                            <span class="label">Disasters</span>
+                            <span id="totalDisasters" class="value alert">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h3>🔍 Filters</h3>
+                    <label>Region</label>
+                    <select id="regionFilter">
+                        <option value="All">🌍 Global View</option>
+                        <option value="Asia">🌏 Asia Pacific</option>
+                        <option value="North America">🌎 North America</option>
+                        <option value="Europe">🇪🇺 Europe</option>
+                    </select>
+
+                    <label style="margin-top: 10px; display:block;">Product Line</label>
+                    <select id="productFilter">
+                        <option value="All">📦 Show All</option>
+                        <option value="P1">🟢 P1: Electronics</option>
+                        <option value="P2">🔵 P2: Automotive</option>
+                        <option value="P3">🟡 P3: Textiles</option>
+                        <option value="P4">🟠 P4: Pharma</option>
+                        <option value="P5">🟣 P5: Consumer</option>
+                    </select>
+                </div>
+
+                <div class="panel god-mode-panel">
+                    <div class="god-header">
+                        <h3>⚡ God Mode</h3>
+                        <button id="toggleGodMode" class="small-btn">Expand</button>
+                    </div>
+                    
+                    <div id="godModeControls" class="hidden">
+                        <select id="disasterType">
+                            <option value="Earthquake">Earthquake</option>
+                            <option value="CyberAttack">Cyber Attack</option>
+                            <option value="PortStrike">Port Strike</option>
+                            <option value="Flood">Flood</option>
+                        </select>
+                        <div class="coords-row">
+                            <input type="number" id="godLat" placeholder="Lat" step="0.01">
+                            <input type="number" id="godLon" placeholder="Lon" step="0.01">
+                        </div>
+                        <button id="confirmDisaster" class="danger-btn">💥 EXECUTE IMPACT</button>
+                    </div>
+                </div>
+
+                <div class="panel chat-panel">
+                    <div class="chat-header-row">
+                        <h3>💬 AI Assistant</h3>
+                        <button id="expandChat" class="icon-small" title="Expand Chat">⛶</button>
+                    </div>
+                    
+                    <div id="chatMessages" class="chat-box">
+                        <div class="message bot">
+                            TITAN System Ready. Awaiting commands.
+                        </div>
+                    </div>
+                    <div class="chat-input-row">
+                        <input type="text" id="chatInput" placeholder="Ask about risks...">
+                        <button id="chatSend">></button>
+                    </div>
+                </div>
+            </aside>
+
+            <main class="globe-wrapper">
+                <div id="globeContainer"></div>
+                
+                <div id="loadingOverlay" class="overlay">
+                    <div class="spinner"></div>
+                    <p>Acquiring Satellite Data...</p>
+                </div>
+
+                <div class="legend">
+                    <div class="legend-item"><span class="dot green"></span> Factory</div>
+                    <div class="legend-item"><span class="dot cyan"></span> Port</div>
+                    <div class="legend-item"><span class="dot pink"></span> Warehouse</div>
+                    <div class="legend-item"><span class="dot red animate"></span> Active Disaster</div>
+                </div>
+            </main>
+
+        </div>
+    </div>
+
+    <div id="chatModal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>💬 TITAN Intelligence Core</h2>
+                <button id="closeChatModal" class="close-btn">×</button>
+            </div>
+            <div id="modalChatMessages" class="modal-messages">
+                </div>
+            <div class="modal-input-area">
+                <input type="text" id="modalChatInput" placeholder="Type complex query here...">
+                <button id="modalChatSend">SEND REQUEST</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/dashboard.js"></script>
+</body>
+</html>

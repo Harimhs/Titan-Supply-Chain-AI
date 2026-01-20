@@ -1,106 +1,103 @@
 #!/usr/bin/env python3
 """
-Groq LLM Client - Fast inference with LLaMA models
+Groq Client: Fast LLM inference with System Prompt
 """
-
+import os
 from groq import Groq
-from src.utils.config import Config
-from typing import Optional
-import asyncio
+from dotenv import load_dotenv
 
+load_dotenv()
 
-class GroqLLM:
-    """
-    Wrapper for Groq API (fast open-source model inference)
-    """
+class GroqClient:
+    def __init__(self):
+        api_key = os.getenv("GROQ_API_KEY")
+        if not api_key:
+            raise ValueError("GROQ_API_KEY not found in .env")
+        
+        self.client = Groq(api_key=api_key)
+        self.model = "llama-3.3-70b-versatile"
+        
+        # System prompt for TITAN
+        self.system_prompt = """You are TITAN AI, an expert supply chain intelligence assistant.
+
+        Your role:
+        - Analyze supply chain data (factories, warehouses, ports, routes, risks)
+        - Provide clear, actionable insights
+        - Be concise but informative
+        - Use emojis sparingly for emphasis
+        - Format responses with markdown headers and lists
+
+        Response format:
+        1. Start with a brief summary (1-2 sentences)
+        2. Use ## for main sections
+        3. Use bullet points for lists
+        4. Include numbers and statistics when available
+
+        Keep responses under 300 words."""
+        
+        print("✅ Groq LLM initialized")
     
-    def __init__(self, model: str = "llama-3.3-70b-versatile", temperature: float = 0.7):
-        """
-        Initialize Groq client
+    def generate(self, prompt, context=None, max_tokens=1000):
+        """Generate response - NO DOUBLE PRINTING"""
+        full_prompt = prompt
         
-        Args:
-            model: Model name (default: llama-3.3-70b-versatile)
-            temperature: Sampling temperature (0.0-1.0)
-        """
-        self.client = Groq(api_key=Config.GROQ_API_KEY)
-        self.model = model
-        self.temperature = temperature
-        
-        # Groq's fast models
-        self.available_models = [
-            "llama-3.3-70b-versatile",      # Best balance
-            "llama-3.1-70b-versatile",      # Fast
-            "mixtral-8x7b-32768",            # Long context
-            "gemma2-9b-it"                   # Lightweight
-        ]
-    
-    def generate(self, prompt: str, temperature: Optional[float] = None, max_tokens: int = 2048) -> str:
-        """
-        Generate text completion
-        
-        Args:
-            prompt: Input prompt
-            temperature: Override default temperature
-            max_tokens: Maximum tokens to generate
-            
-        Returns:
-            Generated text
-        """
-        temp = temperature if temperature is not None else self.temperature
+        if context:
+            full_prompt = f"""Based on the following data, answer the user's question.
+
+    DATA:
+    {self._format_context(context)}
+
+    USER QUESTION: {prompt}
+
+    Provide a clear, structured response."""
         
         try:
-            response = self.client.chat.completions.create(
+            # REMOVE THIS LINE: print("🤖 Calling Groq LLM...")  
+            
+            completion = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": "You are a helpful supply chain AI assistant."},
-                    {"role": "user", "content": prompt}
+                    {"role": "system", "content": self.system_prompt},
+                    {"role": "user", "content": full_prompt}
                 ],
-                temperature=temp,
-                max_tokens=max_tokens
+                max_tokens=max_tokens,
+                temperature=0.3
             )
             
-            return response.choices[0].message.content
-        
+            response = completion.choices[0].message.content
+            # REMOVE THIS LINE: print("✅ LLM response generated")
+            return response
+            
         except Exception as e:
-            print(f"❌ Groq API Error: {e}")
             return f"Error: {str(e)}"
-    
-    async def generate_async(self, prompt: str, temperature: float = None) -> str:
-        """
-        Async wrapper for generate() method
-        (Groq SDK is sync, so we run in executor)
-        """
-        loop = asyncio.get_event_loop()
-        temp = temperature if temperature is not None else self.temperature
-        return await loop.run_in_executor(None, self.generate, prompt, temp)
-    
-    def get_llm(self):
-        """
-        Return self for compatibility with LangChain-style usage
-        """
-        return self
 
-
-# ============================================================================
-# TESTS
-# ============================================================================
-
-if __name__ == "__main__":
-    print("🧪 Testing Groq Client...")
     
-    llm = GroqLLM(temperature=0.2)
+    def _format_context(self, context):
+        """Format context dictionary into readable text"""
+        formatted = []
+        
+        for key, value in context.items():
+            if isinstance(value, list):
+                formatted.append(f"{key.upper()}: {len(value)} items")
+                for i, item in enumerate(value[:5], 1):  # First 5 items
+                    formatted.append(f"  {i}. {self._format_item(item)}")
+            elif isinstance(value, dict):
+                formatted.append(f"{key.upper()}:")
+                for k, v in value.items():
+                    formatted.append(f"  {k}: {v}")
+            else:
+                formatted.append(f"{key.upper()}: {value}")
+        
+        return "\n".join(formatted)
     
-    # Test 1: Simple generation
-    print("\n📝 Test 1: Simple Query")
-    response = llm.generate("What is supply chain management? Answer in 2 sentences.")
-    print(f"Response: {response}")
-    
-    # Test 2: Async generation
-    print("\n📝 Test 2: Async Query")
-    async def test_async():
-        response = await llm.generate_async("List 3 types of supply chain disruptions.")
-        print(f"Response: {response}")
-    
-    asyncio.run(test_async())
-    
-    print("\n✅ Groq Tests Complete!")
+    def _format_item(self, item):
+        """Format individual item"""
+        if isinstance(item, dict):
+            # Extract key fields
+            if 'name' in item:
+                return item['name']
+            elif 'id' in item:
+                return item['id']
+            else:
+                return str(item)[:50]
+        return str(item)[:50]
