@@ -44,7 +44,7 @@ function initGlobe() {
     const elem = document.getElementById('globeContainer');
     world = Globe()
         (elem)
-        .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg')
+        .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-night.jpg')
 
         .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png')
         .backgroundImageUrl('https://unpkg.com/three-globe/example/img/night-sky.png')
