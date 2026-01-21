@@ -778,8 +778,8 @@ button {
         box-shadow: 10px 0 30px rgba(0,0,0,0.5);
     }
     
-    .sidebar.active {
-        transform: translateX(0);
+    .sidebar.collapsed {
+        transform: translateX(0); /* Bring it on screen */
     }
     
     .brand h2 {
