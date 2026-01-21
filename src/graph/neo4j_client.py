@@ -3,16 +3,47 @@
 Neo4j Graph Database Client - COMPLETE VERSION
 All facility type queries
 """
+import os
+import logging
 from neo4j import GraphDatabase
 from typing import List, Dict, Any
+
+logging.getLogger("neo4j").setLevel(logging.ERROR)
 
 class Neo4jClient:
     """Neo4j database operations"""
     
-    def __init__(self, uri="bolt://localhost:7687", user="neo4j", password="June#12345"):
-        """Initialize Neo4j connection"""
-        self.driver = GraphDatabase.driver(uri, auth=(user, password))
-        print("✅ Neo4j client initialized")
+    def __init__(self):
+        """
+        Initialize Neo4j connection with CLOUD SAFETY NET
+        """
+        # 1. URI LOGIC: Check Env, otherwise force Cloud
+        env_uri = os.getenv("NEO4J_URI", "")
+        if not env_uri or "localhost" in env_uri:
+            print("⚠️ Cloud Environment detected with missing/local URI. Switching to Fallback.")
+            self.uri = "neo4j+s://9a2bef51.databases.neo4j.io"
+        else:
+            self.uri = env_uri
+
+        # 2. AUTH LOGIC: Check Env, otherwise force Cloud Password
+        # We check NEO4J_USERNAME (and NEO4J_USER for safety)
+        self.user = os.getenv("NEO4J_USERNAME", os.getenv("NEO4J_USER", "neo4j"))
+        
+        env_pass = os.getenv("NEO4J_PASSWORD", "")
+        if not env_pass:
+            print("⚠️ No Password Variable found. Using Hardcoded Cloud Password.")
+            self.password = "1HtTwO8Hic-bMo14JFt-YPbopAU24OJU4UUGOPO0978"
+        else:
+            self.password = env_pass
+
+        # 3. CONNECT
+        try:
+            self.driver = GraphDatabase.driver(self.uri, auth=(self.user, self.password))
+            self.driver.verify_connectivity()
+            print(f"✅ Neo4j Client Connected to: {self.uri}")
+        except Exception as e:
+            print(f"❌ Neo4j Connection Failed: {e}")
+            self.driver = None
     
     def close(self):
         """Close connection"""
