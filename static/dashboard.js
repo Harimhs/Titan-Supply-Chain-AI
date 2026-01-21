@@ -44,9 +44,10 @@ function initGlobe() {
     const elem = document.getElementById('globeContainer');
     world = Globe()
         (elem)
-        .globeImageUrl('//unpkg.com/three-globe/example/img/earth-night.jpg')
-        .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png')
-        .backgroundImageUrl('//unpkg.com/three-globe/example/img/night-sky.png')
+        .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg')
+
+        .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png')
+        .backgroundImageUrl('https://unpkg.com/three-globe/example/img/night-sky.png')
         .atmosphereColor('#00f3ff')
         .atmosphereAltitude(0.15)
         .pointLat('lat').pointLng('lon').pointColor('color')
