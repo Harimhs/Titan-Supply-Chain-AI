@@ -45,7 +45,6 @@ function initGlobe() {
     world = Globe()
         (elem)
         .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-night.jpg')
-
         .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png')
         .backgroundImageUrl('https://unpkg.com/three-globe/example/img/night-sky.png')
         .atmosphereColor('#00f3ff')
@@ -78,7 +77,8 @@ function updateGlobe() {
     
     if(loader) loader.style.display = 'flex';
 
-    fetch(`/api/globe-data?region=${region}&product=${product}`)
+    // Fix: Added '&t=' + Date.now() to prevent browser caching of old green data
+    fetch(`/api/globe-data?region=${region}&product=${product}&t=${Date.now()}`)
         .then(r => r.json())
         .then(data => {
             if (data.error) return;
@@ -134,14 +134,14 @@ function executeDisaster() {
     })
     .then(r => r.json())
     .then(data => {
-        btn.innerText = "💥 EXECUTE IMPACT";
+        btn.innerText = "EXECUTE IMPACT";
         if(data.status === 'success') {
             if(data.sitrep) {
                 const html = marked.parse(data.sitrep);
                 addMessage('TITAN', html, 'bot');
             }
             // Update globe to show Broken Nodes (Black/Red)
-            setTimeout(updateGlobe, 1000); 
+            setTimeout(updateGlobe, 2500); 
         }
     });
 }

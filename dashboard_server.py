@@ -182,6 +182,7 @@ def trigger_god_mode():
 **📍 Location:** {report['location']} (Radius: {report['impact_radius']})
 **💥 Impact Analysis:** {report['critical_nodes_offline']} Critical Nodes Offline.
 **🚧 Logistics:** {report['routes_compromised']} Supply Routes Blocked.
+**⚠️ Route Risk:** {report.get('logistics_status', 'Analyzing downstream paths...')}
 
 **🤖 AI AUTONOMOUS ACTIONS:**
 1. **Risk Engine:** Impact Zone Calculated.

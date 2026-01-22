@@ -444,8 +444,13 @@ button {
 
 .message.bot {
     border-left: 2px solid var(--accent-secondary);
-    color: var(--text-secondary);
+    color: #e0e0e0; /* Brighter text for readability */
     background: rgba(255, 255, 255, 0.02);
+    
+    /* NEW FONT STYLES */
+    font-family: 'Segoe UI', Roboto, Helvetica, sans-serif;
+    font-size: 0.9rem; /* Slightly larger for reading reports */
+    line-height: 1.6;
 }
 
 .message.user {
